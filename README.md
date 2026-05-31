@@ -1,6 +1,6 @@
 # UAV Multi-Modal Trajectory Prediction
 
-这是一个面向 ProjectAirSim 无人机运动数据的轻量 3D 多峰轨迹预测框架，服务于背景无人机行为建模、对抗测试和控制算法闭环验证。模型借鉴 TNT / DenseTNT 的目标点条件化思路，但不依赖地图、车道线或 Argoverse 接口：
+这是一个面向 ProjectAirSim 无人机运动数据的轻量 3D 多模态轨迹预测框架，服务于背景无人机行为建模、对抗测试和控制算法闭环验证。模型借鉴 TNT / DenseTNT 的目标点条件化思路，但不依赖地图、车道线等接口：
 
 1. 以 `H` 帧位置、四元数、线速度、角速度和线加速度编码运动历史。
 2. 预测 `K` 个 3D 未来终点位移候选。
@@ -35,53 +35,30 @@ python -m pip install -r requirements.txt
 python -m pip install -e /path/to/ProjectAirSim/client/python/projectairsim
 ```
 
-官方客户端 API 参考：
-
-- https://github.com/iamaisim/ProjectAirSim
-- https://github.com/iamaisim/ProjectAirSim/blob/main/docs/api.md
-
 ## Dataset
 
-训练脚本使用 Hugging Face `datasets` 加载数据：
+数据由 ProjectAirSim 仿真采集脚本生成，数据收集仓库见 [QinCheng0928/ProjectAirSim-UAV-Kinematic-DataGen](https://github.com/QinCheng0928/ProjectAirSim-UAV-Kinematic-DataGen.git)。
+
+当前训练默认使用已发布到 Hugging Face 的数据集：[qincheng037/ProjectAirSim-UAV-Kinematic-Trajectories](https://huggingface.co/datasets/qincheng037/ProjectAirSim-UAV-Kinematic-Trajectories)。训练脚本通过 `datasets` 加载：
 
 ```python
 from datasets import load_dataset
 ds = load_dataset("qincheng037/ProjectAirSim-UAV-Kinematic-Trajectories")
 ```
 
-`UAVTrajectoryWindowDataset` 会：
-
-- 自动记录可见 split、features 和首条样本 schema。
-- 使用已有 `train` / `validation` / `test` split；若没有 `validation`，训练时从 `train` 自动划分。
-- 将每一行视为一个 episode，并直接读取其中的 `states` 列表。
-- 按 `history_len`、`future_len` 和 `stride` 切滑动窗口。
-- 对每个 episode 的启动阶段额外构造历史不足 `history_len` 的冷启动窗口，使训练输入覆盖在线启动场景。
-
-数据采集端存储的每个状态固定为 17 维，格式为：
-
-```text
-[t, x, y, z, qw, qx, qy, qz, vx, vy, vz, wx, wy, wz, ax, ay, az]
-```
-
-时间戳 `t` 不作为模型输入。数据适配器将四元数从采集端的 `qw, qx, qy, qz` 重排为在线模块一致的 `qx, qy, qz, qw`，因此模型实际接收的 16 维历史状态为：
-
-```text
-[x, y, z, qx, qy, qz, qw, vx, vy, vz, wx, wy, wz, ax, ay, az]
-```
-
 ## Training
 
 ```bash
-python train.py \
-  --dataset_name qincheng037/ProjectAirSim-UAV-Kinematic-Trajectories \
-  --output_dir outputs/uav_dense_goal \
-  --history_len 20 \
-  --future_len 30 \
-  --num_modes 6 \
-  --batch_size 64 \
-  --epochs 20 \
-  --hidden_dim 128 \
-  --stride 1 \
+python train.py 
+  --dataset_name qincheng037/ProjectAirSim-UAV-Kinematic-Trajectories 
+  --output_dir outputs/uav_dense_goal 
+  --history_len 20 
+  --future_len 30 
+  --num_modes 6 
+  --batch_size 64 
+  --epochs 20 
+  --hidden_dim 16 
+  --stride 1 
   --device auto
 ```
 
@@ -95,23 +72,23 @@ loss = SmoothL1(best_trajectory, gt)
 
 日志包含 `loss`、`reg_loss`、`cls_loss`、`goal_loss`、`minADE`、`minFDE`、`MR`、`Top1 ADE/FDE`。checkpoint 包含模型、优化器、配置和训练集标准化统计。
 
-推理、可视化和在线节点通过项目内的 `load_checkpoint()` 加载权重，默认使用 `torch.load(..., weights_only=True)`，避免 PyTorch 关于 pickle 反序列化安全性的 `FutureWarning`。仍建议只加载自己训练或可信来源的 checkpoint。
+推理、可视化和在线节点通过项目内的 `load_checkpoint()` 加载权重，默认使用 `torch.load(..., weights_only=True)`。
 
 ## Offline Inference
 
 ```bash
-python infer.py \
-  --checkpoint outputs/uav_dense_goal/checkpoint_epoch_0020.pt \
-  --split test \
-  --num_samples 50 \
-  --output outputs/predictions.json \
+python infer.py 
+  --checkpoint outputs/uav_dense_goal/checkpoint_epoch_0020.pt 
+  --split test 
+  --num_samples 50 
+  --output outputs/predictions.json 
   --format json
 ```
 
 保存 NPZ：
 
 ```bash
-python infer.py --checkpoint outputs/uav_dense_goal/checkpoint_epoch_0020.pt \
+python infer.py --checkpoint outputs/uav_dense_goal/checkpoint_epoch_0020.pt 
   --output outputs/predictions.npz --format npz
 ```
 
