@@ -1,0 +1,7 @@
+.agent/
+.codex/
+.vscode/
+
+__pycache__/
+
+outputs/
