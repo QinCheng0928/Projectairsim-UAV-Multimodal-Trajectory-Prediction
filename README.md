@@ -99,14 +99,12 @@ python infer.py --checkpoint outputs/uav_dense_goal/checkpoint_epoch_0020.pt
 专用可视化脚本会画出 `history_len + future_len` 个真实轨迹点，并从历史末点开始画出 `num_modes` 条预测轨迹：
 
 ```bash
-python visualize_trajectory.py \
-  --checkpoint outputs/uav_dense_goal/checkpoint_epoch_0020.pt \
-  --split test \
-  --sample_index 0 \
+python visualize_trajectory.py 
+  --checkpoint outputs/uav_dense_goal/checkpoint_epoch_0020.pt 
+  --split test 
+  --sample_index 0 
   --output outputs/trajectory_visualization.png
 ```
-
-默认只从完整历史窗口中取样，避免把冷启动虚拟历史误当作真实轨迹。若确实想检查冷启动窗口，可添加 `--include_cold_start`。
 
 ## ProjectAirSim Online Inference
 
